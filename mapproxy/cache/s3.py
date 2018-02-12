@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import with_statement
 
-import calendar
 import hashlib
 import sys
 import threading
@@ -35,14 +35,23 @@ except ImportError:
 import logging
 log = logging.getLogger('mapproxy.cache.s3')
 
+_s3_sessions_cache = {}
 
-_s3_sessions_cache = threading.local()
-def s3_session(profile_name=None):
-    if not hasattr(_s3_sessions_cache, 'sessions'):
-        _s3_sessions_cache.sessions = {}
-    if profile_name not in _s3_sessions_cache.sessions:
-        _s3_sessions_cache.sessions[profile_name] = boto3.session.Session(profile_name=profile_name)
-    return _s3_sessions_cache.sessions[profile_name]
+def s3_session(profile_name=None, max_pool_connections=None, region_name=None):
+    if profile_name not in _s3_sessions_cache:
+        log.debug('S3:cache:session  Starting s3 session for profile %s' % profile_name)
+
+        config = botocore.config.Config()
+        if max_pool_connections:
+            config = config.merge(botocore.config.Config(max_pool_connections=max_pool_connections))
+            log.debug('S3:james2  Starting s3 session for profile %s' % profile_name)
+        if region_name:
+            config = config.merge(botocore.config.Config(region_name=region_name))
+            log.debug('S3:james  Starting s3 session for profile %s' % profile_name)
+
+        _s3_sessions_cache[profile_name] = boto3.session.Session(profile_name=profile_name).client("s3", config=config)
+
+    return _s3_sessions_cache[profile_name]
 
 class S3ConnectionError(Exception):
     pass
@@ -50,11 +59,14 @@ class S3ConnectionError(Exception):
 class S3Cache(TileCacheBase):
 
     def __init__(self, base_path, file_ext, directory_layout='tms',
-                 bucket_name='mapproxy', profile_name=None,
+                 bucket_name='mapproxy', profile_name=None, max_pool_connections=None, region_name=None,
                  _concurrent_writer=4):
         super(S3Cache, self).__init__()
         self.lock_cache_id = hashlib.md5(base_path.encode('utf-8') + bucket_name.encode('utf-8')).hexdigest()
         self.bucket_name = bucket_name
+        self.profile_name = profile_name
+        self.max_pool_connections = max_pool_connections
+        self.region_name = region_name
         try:
             self.bucket = self.conn().head_bucket(Bucket=bucket_name)
         except botocore.exceptions.ClientError as e:
@@ -82,7 +94,7 @@ class S3Cache(TileCacheBase):
             raise ImportError("S3 Cache requires 'boto3' package.")
 
         try:
-            return s3_session().client("s3")
+            return s3_session(self.profile_name, self.max_pool_connections, self.region_name)
         except Exception as e:
             raise S3ConnectionError('Error during connection %s' % e)
 
@@ -93,7 +105,7 @@ class S3Cache(TileCacheBase):
 
     def _set_metadata(self, response, tile):
         if 'LastModified' in response:
-            tile.timestamp = calendar.timegm(response['LastModified'].timetuple())
+            tile.timestamp = float(response['LastModified'].strftime('%s'))
         if 'ContentLength' in response:
             tile.size = response['ContentLength']
 

@@ -144,6 +144,8 @@ cache_types = {
         'directory': str(),
         'profile_name': str(),
         'tile_lock_dir': str(),
+        'max_pool_connections': int(),
+        'region_name': str(),
      },
     'riak': {
         'nodes': [riak_node],
@@ -369,6 +371,8 @@ mapproxy_yaml_spec = {
             's3': {
                 'bucket_name': str(),
                 'profile_name': str(),
+                'max_pool_connections': int(),
+                'region_name': str(),
             },
         },
         'grid': {
