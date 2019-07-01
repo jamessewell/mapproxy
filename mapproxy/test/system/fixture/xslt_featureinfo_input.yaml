@@ -1,8 +1,5 @@
 services:
   wms:
-    featureinfo_xslt:
-      html: ./fi_out_html.xsl
-      xml: ./fi_out.xsl
 
 layers:
   - name: fi_layer

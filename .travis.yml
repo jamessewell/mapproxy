@@ -2,10 +2,10 @@ language: python
 
 python:
   - "2.7"
-  - "3.3"
   - "3.4"
   - "3.5"
   - "3.6"
+  # for 3.7 see at matrix.include
 
 services:
   - couchdb
@@ -15,10 +15,9 @@ services:
 addons:
   apt:
     packages:
-      - libproj0
+      - proj-bin
       - libgeos-dev
       - libgdal-dev
-      - libgdal1h
       - libxslt1-dev
       - libxml2-dev
       - build-essential
@@ -41,23 +40,33 @@ env:
     - BOTO_CONFIG=/doesnotexist
 
 matrix:
-  # Test 2.7 and 3.6 also with latest Pillow version
   include:
+    # Test 2.7 and 3.6 also with latest Pillow version
     - python: "2.7"
       env: USE_LATEST_PILLOW=1
     - python: "3.6"
       env: USE_LATEST_PILLOW=1
 
+    # Python 3.7 requires xenial and sudo
+    # https://github.com/travis-ci/travis-ci/issues/9069#issuecomment-425720905
+    - python: "3.7"
+      sudo: required
+      dist: xenial
+      env:
+        - MAPPROXY_TEST_RIAK_HTTP=
+        - MAPPROXY_TEST_RIAK_PBC=
+
+  allow_failures:
+    - python: "3.7"
+
 cache:
   directories:
     - $HOME/.cache/pip
-
-before_install:
-    - echo -n "ulimit -n 4096" | sudo tee /etc/default/riak && sudo service riak restart	# default open file limit is too low for riak
 
 install:
     - "pip install -r requirements-tests.txt"
     - "if [[ $USE_LATEST_PILLOW = '1' ]]; then pip install -U Pillow; fi"
     - "pip freeze"
 
-script: nosetests mapproxy
+script:
+    - pytest mapproxy
